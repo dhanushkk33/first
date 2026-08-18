@@ -39,7 +39,7 @@ def get_weather(city: str) -> dict:
 # serving-endpoint environment variable — see deploy/deploy_to_databricks.py
 root_agent = Agent(
     name="mini_weather_agent",
-    model="gemini-2.0-flash",
+    model="gemini-3.6-flash",
     description="A small starter agent that answers weather questions for a city.",
     instruction=(
         "You are a concise, helpful assistant. "
