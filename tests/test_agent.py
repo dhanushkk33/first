@@ -34,7 +34,7 @@ def test_get_weather_unknown_city_returns_error():
 
 def test_agent_is_configured_correctly():
     assert root_agent.name == "mini_weather_agent"
-    assert root_agent.model == "gemini-2.0-flash"
+    assert root_agent.model == "gemini-3.6-flash"
     tool_names = [t.__name__ for t in root_agent.tools]
     assert "get_weather" in tool_names
 
