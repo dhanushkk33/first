@@ -1,0 +1,15 @@
+# Core Agent Framework
+google-adk>=2.6.0
+pydantic
+
+# Testing Framework
+pytest
+
+# Local env loading
+python-dotenv
+
+# Databricks Deployment & Tracking
+mlflow
+databricks-agents
+databricks-sdk
+databricks-langchain
