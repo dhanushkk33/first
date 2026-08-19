@@ -16,7 +16,7 @@ Optional (sensible defaults below):
 import os
 import sys
 import time
-
+from google.adk.messages import UserMessage
 import mlflow
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import (
@@ -54,40 +54,40 @@ os.environ["DATABRICKS_HOST"] = DATABRICKS_HOST
 os.environ["DATABRICKS_TOKEN"] = DATABRICKS_TOKEN
 
 
-class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
-    """Wraps the ADK agent as an MLflow pyfunc model so Databricks can serve it."""
+# class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
+#     """Wraps the ADK agent as an MLflow pyfunc model so Databricks can serve it."""
 
-    def load_context(self, context):
-        from google.adk.runners import InMemoryRunner
+#     def load_context(self, context):
+#         from google.adk.runners import InMemoryRunner
 
-        os.environ.setdefault("GOOGLE_API_KEY", GOOGLE_API_KEY)
-        self.runner = InMemoryRunner(agent=root_agent)
+#         os.environ.setdefault("GOOGLE_API_KEY", GOOGLE_API_KEY)
+#         self.runner = InMemoryRunner(agent=root_agent)
 
-    def predict(self, context, model_input):
-        import asyncio
+#     def predict(self, context, model_input):
+#         import asyncio
 
-        if hasattr(model_input, "to_dict"):  # pandas DataFrame
-            prompts = model_input["prompt"].tolist()
-        elif isinstance(model_input, dict):
-            prompts = model_input.get("prompt", [str(model_input)])
-        else:
-            prompts = [str(model_input)]
+#         if hasattr(model_input, "to_dict"):  # pandas DataFrame
+#             prompts = model_input["prompt"].tolist()
+#         elif isinstance(model_input, dict):
+#             prompts = model_input.get("prompt", [str(model_input)])
+#         else:
+#             prompts = [str(model_input)]
 
-        async def _ask(prompt: str) -> str:
-            session = await self.runner.session_service.create_session(
-                app_name=self.runner.app_name, user_id="ci_cd_user"
-            )
-            final_text = ""
-            async for event in self.runner.run_async(
-                user_id="ci_cd_user",
-                session_id=session.id,
-                new_message=prompt,
-            ):
-                if event.is_final_response() and event.content:
-                    final_text = event.content.parts[0].text
-            return final_text
+#         async def _ask(prompt: str) -> str:
+#             session = await self.runner.session_service.create_session(
+#                 app_name=self.runner.app_name, user_id="ci_cd_user"
+#             )
+#             final_text = ""
+#             async for event in self.runner.run_async(
+#                 user_id="ci_cd_user",
+#                 session_id=session.id,
+#                 new_message=prompt,
+#             ):
+#                 if event.is_final_response() and event.content:
+#                     final_text = event.content.parts[0].text
+#             return final_text
 
-        return [asyncio.run(_ask(p)) for p in prompts]
+#         return [asyncio.run(_ask(p)) for p in prompts]
 
 
 # def log_and_register_model() -> str:
@@ -115,6 +115,44 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
 
 #     return logged.registered_model_version
 
+class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
+    """Wraps the ADK agent as an MLflow pyfunc model so Databricks can serve it."""
+
+    def load_context(self, context):
+        from google.adk.runners import InMemoryRunner
+        os.environ.setdefault("GOOGLE_API_KEY", GOOGLE_API_KEY)
+        self.runner = InMemoryRunner(agent=root_agent)
+
+    def predict(self, context, model_input):
+        import asyncio
+
+        if hasattr(model_input, "to_dict"):
+            prompts = model_input["prompt"].tolist()
+        elif isinstance(model_input, dict):
+            prompts = model_input.get("prompt", [str(model_input)])
+        else:
+            prompts = [str(model_input)]
+
+        async def _ask(prompt: str) -> str:
+            session = await self.runner.session_service.create_session(
+                app_name=self.runner.app_name, user_id="ci_cd_user"
+            )
+            final_text = ""
+            
+            # BUG FIX: Wrap the prompt in UserMessage for ADK 2.0!
+            async for event in self.runner.run_async(
+                user_id="ci_cd_user",
+                session_id=session.id,
+                new_message=UserMessage(prompt), 
+            ):
+                if hasattr(event, 'content') and event.content and hasattr(event.content, 'parts'):
+                    for part in event.content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            final_text += part.text
+            return final_text
+
+        return [asyncio.run(_ask(p)) for p in prompts]
+
 from mlflow.models.signature import infer_signature
 
 def log_and_register_model() -> str:
@@ -123,10 +161,8 @@ def log_and_register_model() -> str:
     mlflow.set_tracking_uri("databricks")
     mlflow.set_experiment("/Shared/mini_weather_agent_logs")
 
-    # 1. Define the Signature (Tell Unity Catalog the exact API format)
+    # Give MLflow a dummy input so it can build the Signature automatically
     input_example = {"prompt": "What is the weather in Chennai?"}
-    output_example = ["It's hot and humid, around 34°C."]
-    signature = infer_signature(input_example, output_example)
 
     with mlflow.start_run(run_name=f"mini_weather_agent_{GIT_SHA[:7]}") as run:
         mlflow.set_tag("git_sha", GIT_SHA)
@@ -136,7 +172,6 @@ def log_and_register_model() -> str:
             artifact_path="agent",
             python_model=_ADKAgentWrapper(),
             registered_model_name=UC_MODEL_FQN,
-            signature=signature,          # <--- THE FIX
             input_example=input_example,  # <--- THE FIX
             pip_requirements=[
                 "google-adk>=2.6.0",
