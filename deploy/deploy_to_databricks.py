@@ -137,9 +137,11 @@ def deploy_endpoint(model_version: str) -> None:
         print(f"Creating new endpoint '{ENDPOINT_NAME}' with model version {model_version}")
         client.serving_endpoints.create(
             name=ENDPOINT_NAME,
-            config=EndpointCoreConfigInput(served_entities=served_entities),
+            config=EndpointCoreConfigInput(
+                name=ENDPOINT_NAME,  # 🛑 THE FIX: The SDK now demands the name here too!
+                served_entities=served_entities
+            ),
         )
-
     print("Waiting for endpoint to become ready...")
     for _ in range(40): 
         state = client.serving_endpoints.get(ENDPOINT_NAME).state
