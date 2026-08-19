@@ -94,18 +94,30 @@ def log_and_register_model() -> str:
         mlflow.set_tag("git_sha", GIT_SHA)
         mlflow.set_tag("source", "github-actions-ci-cd")
 
+        conda_env = {
+        "name": "mlflow-env",
+        "channels": ["conda-forge"],
+        "dependencies": [
+            "python=3.11",
+            "pip<=26.2.1",
+            {
+                "pip": [
+                    "google-adk>=2.6.0",
+                    "mlflow",
+                    "databricks-sdk",
+                    "google-genai"
+                ]
+            }
+        ]
+    }
+
         logged = mlflow.pyfunc.log_model(
             artifact_path="agent",
             python_model=_ADKAgentWrapper(),
             registered_model_name=UC_MODEL_FQN,
             signature=signature,
             input_example=input_example,
-            pip_requirements=[
-                "google-adk>=2.6.0",
-                "mlflow",
-                "databricks-sdk",
-                "google-genai"  # Safely inject the underlying SDK dependency
-            ],
+            conda_env=conda_env,
         )
         print(f"Logged model in run {run.info.run_id}, version {logged.registered_model_version}")
 
