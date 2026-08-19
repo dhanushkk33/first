@@ -95,6 +95,8 @@ def log_and_register_model() -> str:
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_tracking_uri("databricks")
 
+    mlflow.set_experiment("/Shared/mini_weather_agent_logs")
+
     with mlflow.start_run(run_name=f"mini_weather_agent_{GIT_SHA[:7]}") as run:
         mlflow.set_tag("git_sha", GIT_SHA)
         mlflow.set_tag("source", "github-actions-ci-cd")
