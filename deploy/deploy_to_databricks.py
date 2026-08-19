@@ -143,7 +143,7 @@ def deploy_endpoint(model_version: str) -> None:
             ),
         )
     print("Waiting for endpoint to become ready...")
-    for _ in range(40): 
+    for _ in range(120): 
         state = client.serving_endpoints.get(ENDPOINT_NAME).state
         print(f"  ready={state.ready} config_update={state.config_update}")
         if str(state.ready) == "EndpointStateReady.READY":
