@@ -50,6 +50,7 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
 
     def predict(self, context, model_input):
         import asyncio
+        from google.genai import types  # THE OFFICIAL IMPORT
 
         if hasattr(model_input, "to_dict"):  
             prompts = model_input["prompt"].tolist()
@@ -64,11 +65,16 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
             )
             final_text = ""
             
-            # Pass our custom duck-typed object to the runner!
+            # BUILD THE EXACT GOOGLE GENAI CONTENT OBJECT
+            msg = types.Content(
+                role="user", 
+                parts=[types.Part(text=prompt)]
+            )
+
             async for event in self.runner.run_async(
                 user_id="ci_cd_user",
                 session_id=session.id,
-                new_message=CI_UserMessage(prompt), 
+                new_message=msg, 
             ):
                 if hasattr(event, 'content') and event.content and hasattr(event.content, 'parts'):
                     for part in event.content.parts:
@@ -77,7 +83,6 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
             return final_text
 
         return [asyncio.run(_ask(p)) for p in prompts]
-
 
 def log_and_register_model() -> str:
     """Logs the agent to MLflow and registers it in Unity Catalog."""
