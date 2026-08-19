@@ -117,7 +117,7 @@ def log_and_register_model() -> str:
             registered_model_name=UC_MODEL_FQN,
             signature=signature,
             input_example=input_example,
-            classmethodode_paths=[os.path.join(os.path.dirname(__file__), "..", "src", "main_agent")],
+            code_paths=[os.path.join(os.path.dirname(__file__), "..", "src", "main_agent")],
             conda_env=conda_env,
         )
         print(f"Logged model in run {run.info.run_id}, version {logged.registered_model_version}")
