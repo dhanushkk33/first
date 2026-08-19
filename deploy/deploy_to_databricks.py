@@ -2,6 +2,9 @@ import os
 import sys
 import time
 
+# 🛑 THE MASTER FIX: Stop MLflow from spying on our environment variables!
+os.environ["MLFLOW_RECORD_ENV_VARS_IN_MODEL_LOGGING"] = "false"
+
 import mlflow
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import EndpointCoreConfigInput, ServedEntityInput
@@ -33,13 +36,6 @@ os.environ["DATABRICKS_HOST"] = DATABRICKS_HOST
 os.environ["DATABRICKS_TOKEN"] = DATABRICKS_TOKEN
 
 
-# THE FOOLPROOF FIX: A Custom Message Class that tricks ADK 2.0
-class CI_UserMessage:
-    def __init__(self, prompt_text):
-        self.role = "user"
-        self.content = prompt_text
-
-
 class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
     """Wraps the ADK agent as an MLflow pyfunc model so Databricks can serve it."""
 
@@ -50,7 +46,7 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
 
     def predict(self, context, model_input):
         import asyncio
-        from google.genai import types  # THE OFFICIAL IMPORT
+        from google.genai import types 
 
         if hasattr(model_input, "to_dict"):  
             prompts = model_input["prompt"].tolist()
@@ -65,7 +61,6 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
             )
             final_text = ""
             
-            # BUILD THE EXACT GOOGLE GENAI CONTENT OBJECT
             msg = types.Content(
                 role="user", 
                 parts=[types.Part(text=prompt)]
@@ -84,13 +79,13 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
 
         return [asyncio.run(_ask(p)) for p in prompts]
 
+
 def log_and_register_model() -> str:
     """Logs the agent to MLflow and registers it in Unity Catalog."""
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_tracking_uri("databricks")
     mlflow.set_experiment("/Shared/mini_weather_agent_logs")
 
-    # Define the Signature for Unity Catalog
     input_example = {"prompt": "What is the weather in Chennai?"}
     output_example = ["It's hot and humid, around 34°C."]
     signature = infer_signature(input_example, output_example)
@@ -109,6 +104,7 @@ def log_and_register_model() -> str:
                 "google-adk>=2.6.0",
                 "mlflow",
                 "databricks-sdk",
+                "google-genai"  # Safely inject the underlying SDK dependency
             ],
         )
         print(f"Logged model in run {run.info.run_id}, version {logged.registered_model_version}")
@@ -160,7 +156,6 @@ def deploy_endpoint(model_version: str) -> None:
 if __name__ == "__main__":
     version = log_and_register_model()
     deploy_endpoint(version)
-
 
 
 
