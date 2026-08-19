@@ -90,12 +90,43 @@ class _ADKAgentWrapper(mlflow.pyfunc.PythonModel):
         return [asyncio.run(_ask(p)) for p in prompts]
 
 
+# def log_and_register_model() -> str:
+#     """Logs the agent to MLflow and registers it in Unity Catalog. Returns the new model version."""
+#     mlflow.set_registry_uri("databricks-uc")
+#     mlflow.set_tracking_uri("databricks")
+
+#     mlflow.set_experiment("/Shared/mini_weather_agent_logs")
+
+#     with mlflow.start_run(run_name=f"mini_weather_agent_{GIT_SHA[:7]}") as run:
+#         mlflow.set_tag("git_sha", GIT_SHA)
+#         mlflow.set_tag("source", "github-actions-ci-cd")
+
+#         logged = mlflow.pyfunc.log_model(
+#             artifact_path="agent",
+#             python_model=_ADKAgentWrapper(),
+#             registered_model_name=UC_MODEL_FQN,
+#             pip_requirements=[
+#                 "google-adk>=2.6.0",
+#                 "mlflow",
+#                 "databricks-sdk",
+#             ],
+#         )
+#         print(f"Logged model in run {run.info.run_id}, version {logged.registered_model_version}")
+
+#     return logged.registered_model_version
+
+from mlflow.models.signature import infer_signature
+
 def log_and_register_model() -> str:
-    """Logs the agent to MLflow and registers it in Unity Catalog. Returns the new model version."""
+    """Logs the agent to MLflow and registers it in Unity Catalog."""
     mlflow.set_registry_uri("databricks-uc")
     mlflow.set_tracking_uri("databricks")
-
     mlflow.set_experiment("/Shared/mini_weather_agent_logs")
+
+    # 1. Define the Signature (Tell Unity Catalog the exact API format)
+    input_example = {"prompt": "What is the weather in Chennai?"}
+    output_example = ["It's hot and humid, around 34°C."]
+    signature = infer_signature(input_example, output_example)
 
     with mlflow.start_run(run_name=f"mini_weather_agent_{GIT_SHA[:7]}") as run:
         mlflow.set_tag("git_sha", GIT_SHA)
@@ -105,6 +136,8 @@ def log_and_register_model() -> str:
             artifact_path="agent",
             python_model=_ADKAgentWrapper(),
             registered_model_name=UC_MODEL_FQN,
+            signature=signature,          # <--- THE FIX
+            input_example=input_example,  # <--- THE FIX
             pip_requirements=[
                 "google-adk>=2.6.0",
                 "mlflow",
@@ -114,7 +147,6 @@ def log_and_register_model() -> str:
         print(f"Logged model in run {run.info.run_id}, version {logged.registered_model_version}")
 
     return logged.registered_model_version
-
 
 def deploy_endpoint(model_version: str) -> None:
     """Creates the serving endpoint if new, otherwise rolls it forward to the new model version."""
